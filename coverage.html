@@ -1,0 +1,347 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/yohaiaz/conway/game.go (33.3%)</option>
+				
+				<option value="file1">github.com/yohaiaz/conway/main.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "fmt"
+        "math/rand"
+        "strings"
+        "sync"
+        "time"
+)
+
+type ConwayGame struct {
+        world           [][]int
+        generationCount int
+        infectAfter     int
+        max             int
+}
+
+type mutation struct {
+        row int
+        col int
+        val int
+}
+
+func NewGame(width int, height int, infectAfter int, max int) *ConwayGame <span class="cov8" title="1">{
+
+        matrix := make([][]int, height)
+
+        for i := range matrix </span><span class="cov8" title="1">{
+                matrix[i] = make([]int, width)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;ConwayGame{
+                world:       matrix,
+                infectAfter: infectAfter,
+                max:         max,
+        }</span>
+}
+
+func (g *ConwayGame) Generate() chan string <span class="cov0" title="0">{
+
+        output := make(chan string, 10)
+
+        g.init()
+
+        output &lt;- g.display()
+
+        go func() </span><span class="cov0" title="0">{
+                defer close(output)
+
+                for i := 0; i &lt; g.max; i++ </span><span class="cov0" title="0">{
+                        g.generationCount++
+                        g.genNext()
+                        output &lt;- g.display()
+                }</span>
+        }()
+
+        <span class="cov0" title="0">return output</span>
+}
+
+func (g *ConwayGame) init() <span class="cov0" title="0">{
+
+        rand.Seed(time.Now().UnixNano())
+
+        for i := range g.world </span><span class="cov0" title="0">{
+                for j := range g.world[i] </span><span class="cov0" title="0">{
+                        g.world[i][j] = rand.Intn(2)
+                }</span>
+        }
+}
+
+func (g *ConwayGame) genNext() <span class="cov0" title="0">{
+
+        sm := sync.Map{}
+
+        wg := sync.WaitGroup{}
+
+        sem := make(chan bool, 10)
+
+        for i := 0; i &lt; len(g.world); i++ </span><span class="cov0" title="0">{
+                for j := 0; j &lt; len(g.world[0]); j++ </span><span class="cov0" title="0">{
+                        sem &lt;- true
+                        wg.Add(1)
+
+                        go func(i int, j int) </span><span class="cov0" title="0">{
+
+                                defer func() </span><span class="cov0" title="0">{
+                                        wg.Done()
+                                        &lt;-sem
+                                }</span>()
+
+                                <span class="cov0" title="0">neighbors := g.getNeighbors(i, j)
+
+                                currentValueCell := g.world[i][j]
+
+                                infect := 0
+
+                                if g.generationCount &gt;= g.infectAfter </span><span class="cov0" title="0">{
+                                        infect = 1
+                                }</span>
+
+                                <span class="cov0" title="0">nextValueCell := g.decideLiveOrDead(currentValueCell, neighbors, infect)
+
+                                if currentValueCell != nextValueCell </span><span class="cov0" title="0">{
+
+                                        m := &amp;mutation{
+                                                i,
+                                                j,
+                                                nextValueCell,
+                                        }
+
+                                        sm.Store(fmt.Sprintf("%d-%d", i, j), m)
+                                }</span>
+                        }(i, j)
+                }
+        }
+
+        <span class="cov0" title="0">wg.Wait()
+
+        g.dump(sm)</span>
+}
+
+func (g *ConwayGame) getNeighbors(row, col int) []int <span class="cov0" title="0">{
+        neighbors := make([]int, 0)
+
+        for i := -1; i &lt;= 1; i++ </span><span class="cov0" title="0">{
+                for j := -1; j &lt;= 1; j++ </span><span class="cov0" title="0">{
+                        if i == 0 &amp;&amp; j == 0 </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+
+                        <span class="cov0" title="0">if g.isOnMap(row+i, col+j) </span><span class="cov0" title="0">{
+                                neighbors = append(neighbors, g.world[row+i][col+j])
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">return neighbors</span>
+}
+
+func (g *ConwayGame) isOnMap(x int, y int) bool <span class="cov8" title="1">{
+
+        return x &gt;= 0 &amp;&amp; y &gt;= 0 &amp;&amp; x &lt; len(g.world) &amp;&amp; y &lt; len(g.world[0])
+}</span>
+
+func (g *ConwayGame) decideLiveOrDead(cell int, neighbors []int, infected int) int <span class="cov8" title="1">{
+
+        total := 0
+
+        for _, n := range neighbors </span><span class="cov8" title="1">{
+                total += n
+        }</span>
+
+        <span class="cov8" title="1">if infected == 0 </span><span class="cov8" title="1">{
+                // live cell with fewer than 2 - under population
+                if cell == 1 &amp;&amp; total &lt; 2 </span><span class="cov8" title="1">{
+                        return 0
+                }</span>
+
+                // live cell with 2 or 3
+                <span class="cov8" title="1">if cell == 1 &amp;&amp; (total == 2 || total == 3) </span><span class="cov8" title="1">{
+                        return 1
+                }</span>
+
+                // live cell with more than 3 - over population
+                <span class="cov8" title="1">if cell == 1 &amp;&amp; total &gt; 3 </span><span class="cov8" title="1">{
+                        return 0
+                }</span>
+
+                // dead cell with 3
+                <span class="cov8" title="1">if cell == 0 &amp;&amp; total == 3 </span><span class="cov8" title="1">{
+                        return 1
+                }</span>
+        } else<span class="cov8" title="1"> {
+                // dead cell with 3
+                if cell == 0 &amp;&amp; total == 1 </span><span class="cov8" title="1">{
+                        return 1
+                }</span>
+
+                // live cell with 2 or 3
+                <span class="cov8" title="1">if cell == 1 &amp;&amp; total == 0 </span><span class="cov8" title="1">{
+                        return 0
+                }</span>
+        }
+
+        <span class="cov0" title="0">return cell</span>
+}
+
+func (g *ConwayGame) dump(sm sync.Map) <span class="cov8" title="1">{
+        sm.Range(func(k, v interface{}) bool </span><span class="cov8" title="1">{
+                m := v.(*mutation)
+                g.world[m.row][m.col] = m.val
+                return true
+        }</span>)
+}
+
+func (g *ConwayGame) display() string <span class="cov0" title="0">{
+
+        var sb = strings.Builder{}
+
+        for _, row := range g.world </span><span class="cov0" title="0">{
+                for _, v := range row </span><span class="cov0" title="0">{
+                        sb.WriteString(fmt.Sprintf("%d ", v))
+                }</span>
+                //sb.WriteString(fmt.Sprintf("\n"))
+        }
+
+        <span class="cov0" title="0">return sb.String()</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "flag"
+        "fmt"
+)
+
+func main() <span class="cov0" title="0">{
+
+        width := flag.Int("w", 3, "matrix width")
+        height := flag.Int("h", 3, "matrix height")
+        infAfter := flag.Int("i", 2, "infected after number of generation")
+        max := flag.Int("m", 5, "max generation")
+        needHelp := flag.Bool("help", false, "print help")
+
+        flag.Parse()
+
+        if *needHelp &amp;&amp; (flag.NFlag()+len(flag.Args()) == 0) </span><span class="cov0" title="0">{
+                flag.Usage()
+                return
+        }</span>
+
+        <span class="cov0" title="0">fmt.Println("conway next generation game of life - Infection")
+        fmt.Println(fmt.Sprintf("running with params %d, %d, %d, %d ", *width, *height, *infAfter, *max))
+
+        c := NewGame(*width, *height, *infAfter, *max)
+
+        genChan := c.Generate()
+
+        for g := range genChan </span><span class="cov0" title="0">{
+                fmt.Println(g)
+        }</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
